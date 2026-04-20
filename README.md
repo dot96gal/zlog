@@ -127,7 +127,7 @@ const other_logger = logger.withWriter(other_writer); // 出力先変更
 
 | 値 | 説明 |
 |----|------|
-| `.text` | `key=value` 形式のテキストログ（デフォルト） |
+| `.text` | テキスト形式のログ（デフォルト） |
 | `.json` | JSON オブジェクト形式のログ |
 
 ### `Logger`
