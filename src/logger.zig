@@ -1,5 +1,11 @@
 const std = @import("std");
 
+/// ログ出力時に発生しうるエラー集合。
+pub const Error = error{
+    /// 出力先への書き込みに失敗した。
+    WriteFailed,
+};
+
 /// ログの出力フォーマットを表す列挙型。`Logger.withFormat` でフォーマットを切り替えるために利用する。
 pub const Format = enum {
     /// テキスト形式のログ。
@@ -72,22 +78,22 @@ pub const Logger = struct {
     }
 
     /// エラーレベルのログを出力する関数。回復不能なエラーを記録するために利用する。
-    pub fn err(self: Logger, comptime msg: []const u8, attrs: anytype) !void {
+    pub fn err(self: Logger, comptime msg: []const u8, attrs: anytype) Error!void {
         try self.log(.err, msg, attrs);
     }
 
     /// 警告レベルのログを出力する関数。注意が必要な状態を記録するために利用する。
-    pub fn warn(self: Logger, comptime msg: []const u8, attrs: anytype) !void {
+    pub fn warn(self: Logger, comptime msg: []const u8, attrs: anytype) Error!void {
         try self.log(.warn, msg, attrs);
     }
 
     /// 情報レベルのログを出力する関数。通常の動作状態を記録するために利用する。
-    pub fn info(self: Logger, comptime msg: []const u8, attrs: anytype) !void {
+    pub fn info(self: Logger, comptime msg: []const u8, attrs: anytype) Error!void {
         try self.log(.info, msg, attrs);
     }
 
     /// デバッグレベルのログを出力する関数。開発時の詳細情報を記録するために利用する。
-    pub fn debug(self: Logger, comptime msg: []const u8, attrs: anytype) !void {
+    pub fn debug(self: Logger, comptime msg: []const u8, attrs: anytype) Error!void {
         try self.log(.debug, msg, attrs);
     }
 
@@ -203,9 +209,9 @@ const DateComponents = struct {
 };
 
 fn unixSecondsToDate(seconds: i64) DateComponents {
-    const secs_per_day: i64 = 86400;
-    var days: i64 = @divFloor(seconds, secs_per_day);
-    const time_of_day: i64 = @mod(seconds, secs_per_day);
+    const secsPerDay: i64 = 86400;
+    var days: i64 = @divFloor(seconds, secsPerDay);
+    const time_of_day: i64 = @mod(seconds, secsPerDay);
 
     const hour: u8 = @intCast(@divFloor(time_of_day, 3600));
     const minute: u8 = @intCast(@divFloor(@mod(time_of_day, 3600), 60));

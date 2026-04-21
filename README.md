@@ -123,6 +123,12 @@ const other_logger = logger.withWriter(other_writer); // 出力先変更
 
 ## API リファレンス
 
+### `Error`
+
+| 値 | 説明 |
+|----|------|
+| `WriteFailed` | 出力先への書き込みに失敗した |
+
 ### `Format`
 
 | 値 | 説明 |
@@ -140,10 +146,10 @@ const other_logger = logger.withWriter(other_writer); // 出力先変更
 | `withFormat` | `(format) Logger` | フォーマットを変更した新しい Logger を返す |
 | `withLoggerName` | `(name) Logger` | ロガー名を設定した新しい Logger を返す |
 | `withTimestamp` | `(ts) Logger` | 固定タイムスタンプを設定した新しい Logger を返す（テスト用） |
-| `err` | `(msg, attrs) !void` | エラーレベルでログを出力する |
-| `warn` | `(msg, attrs) !void` | 警告レベルでログを出力する |
-| `info` | `(msg, attrs) !void` | 情報レベルでログを出力する |
-| `debug` | `(msg, attrs) !void` | デバッグレベルでログを出力する |
+| `err` | `(msg, attrs) Error!void` | エラーレベルでログを出力する |
+| `warn` | `(msg, attrs) Error!void` | 警告レベルでログを出力する |
+| `info` | `(msg, attrs) Error!void` | 情報レベルでログを出力する |
+| `debug` | `(msg, attrs) Error!void` | デバッグレベルでログを出力する |
 
 ## 開発者向け
 
