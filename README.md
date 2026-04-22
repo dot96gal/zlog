@@ -20,18 +20,34 @@ Zig 向けシンプル構造化ロギングライブラリ。
 
 ## インストール
 
-`zig fetch` で依存を追加する。
+### 1. `build.zig.zon` に zlog を追加する。
+
+最新のタグは [GitHub Releases](https://github.com/dot96gal/zlog/releases) で確認できる。
+
+以下のコマンドを実行すると、`build.zig.zon` の `.dependencies` に自動的に追加される。
 
 ```sh
-zig fetch --save https://github.com/dot96gal/zlog/archive/<commit>.tar.gz
+zig fetch --save https://github.com/dot96gal/zlog/archive/refs/tags/<version>.tar.gz
 ```
 
-`build.zig` でモジュールをインポートする。
+```zig
+// build.zig.zon（自動追加される内容の例）
+.dependencies = .{
+    .zlog = .{
+        .url = "https://github.com/dot96gal/zlog/archive/refs/tags/<version>.tar.gz",
+        .hash = "<hash>",
+    },
+},
+```
+
+### 2. `build.zig` で zlog モジュールをインポートする。
 
 ```zig
-const zlog_dep = b.dependency("zlog", .{ .target = target, .optimize = optimize });
+const zlog_dep = b.dependency("zlog", .{
+    .target = target,
+    .optimize = optimize,
+});
 const zlog_mod = zlog_dep.module("zlog");
-// 自分の実行ファイルやライブラリに import として追加する
 exe.root_module.addImport("zlog", zlog_mod);
 ```
 
