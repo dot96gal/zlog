@@ -1,7 +1,7 @@
 # zlog
 
 [![API Docs](https://img.shields.io/badge/API%20Docs-GitHub%20Pages-blue)](https://dot96gal.github.io/zlog/)
-[![test](https://github.com/dot96gal/zlog/actions/workflows/test.yml/badge.svg)](https://github.com/dot96gal/zlog/actions/workflows/test.yml)
+[![ci](https://github.com/dot96gal/zlog/actions/workflows/ci.yml/badge.svg)](https://github.com/dot96gal/zlog/actions/workflows/ci.yml)
 [![release](https://github.com/dot96gal/zlog/actions/workflows/release.yml/badge.svg)](https://github.com/dot96gal/zlog/actions/workflows/release.yml)
 
 Zig 向けシンプル構造化ロギングライブラリ。
@@ -181,10 +181,11 @@ mise install
 
 | コマンド | 説明 |
 |---------|------|
-| `mise run build` | コンパイルチェック |
-| `mise run test` | テスト実行 |
-| `mise run fmt` | コードフォーマット |
+| `mise run fmt` | フォーマット |
 | `mise run fmt-check` | フォーマットチェック |
+| `mise run lint` | リント |
+| `mise run build` | ビルド |
+| `mise run test` | テスト |
 | `mise run example:basic` | basic サンプルの実行 |
 | `mise run build-docs` | API ドキュメントのビルド |
 | `mise run serve-docs` | API ドキュメントのローカルサーブ |
