@@ -1,11 +1,11 @@
 const std = @import("std");
 
-const logger_mod = @import("logger.zig");
+const loggerMod = @import("logger.zig");
 
-pub const Logger = logger_mod.Logger;
-pub const Format = logger_mod.Format;
-pub const Error = logger_mod.Error;
+pub const Logger = loggerMod.Logger;
+pub const Format = loggerMod.Format;
+pub const Error = loggerMod.Error;
 
 test {
-    _ = logger_mod;
+    _ = loggerMod;
 }

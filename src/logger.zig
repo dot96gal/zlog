@@ -121,13 +121,13 @@ fn writeText(
 ) !void {
     try writeTimestamp(writer, ts);
 
-    const level_str = switch (level) {
+    const levelStr = switch (level) {
         .err => "ERROR",
         .warn => "WARN",
         .info => "INFO",
         .debug => "DEBUG",
     };
-    try writer.print(" [{s}]", .{level_str});
+    try writer.print(" [{s}]", .{levelStr});
 
     if (logger_name) |name| {
         try writer.print(" [{s}]", .{name});
@@ -159,13 +159,13 @@ fn writeJson(
     try writeTimestamp(writer, ts);
     try writer.writeByte('"');
 
-    const level_str = switch (level) {
+    const levelStr = switch (level) {
         .err => "error",
         .warn => "warn",
         .info => "info",
         .debug => "debug",
     };
-    try writer.print(",\"level\":\"{s}\"", .{level_str});
+    try writer.print(",\"level\":\"{s}\"", .{levelStr});
 
     if (logger_name) |name| {
         try writer.print(",\"logger\":\"{s}\"", .{name});
@@ -211,11 +211,11 @@ const DateComponents = struct {
 fn unixSecondsToDate(seconds: i64) DateComponents {
     const secsPerDay: i64 = 86400;
     var days: i64 = @divFloor(seconds, secsPerDay);
-    const time_of_day: i64 = @mod(seconds, secsPerDay);
+    const timeOfDay: i64 = @mod(seconds, secsPerDay);
 
-    const hour: u8 = @intCast(@divFloor(time_of_day, 3600));
-    const minute: u8 = @intCast(@divFloor(@mod(time_of_day, 3600), 60));
-    const second: u8 = @intCast(@mod(time_of_day, 60));
+    const hour: u8 = @intCast(@divFloor(timeOfDay, 3600));
+    const minute: u8 = @intCast(@divFloor(@mod(timeOfDay, 3600), 60));
+    const second: u8 = @intCast(@mod(timeOfDay, 60));
 
     // Howard Hinnant's civil_from_days algorithm
     days += 719468;
