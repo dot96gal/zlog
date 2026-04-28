@@ -1,10 +1,10 @@
 # zlog
 
 [![API Docs](https://img.shields.io/badge/API%20Docs-GitHub%20Pages-blue)](https://dot96gal.github.io/zlog/)
-[![ci](https://github.com/dot96gal/zlog/actions/workflows/ci.yml/badge.svg)](https://github.com/dot96gal/zlog/actions/workflows/ci.yml)
-[![release](https://github.com/dot96gal/zlog/actions/workflows/release.yml/badge.svg)](https://github.com/dot96gal/zlog/actions/workflows/release.yml)
+[![CI](https://github.com/dot96gal/zlog/actions/workflows/ci.yml/badge.svg)](https://github.com/dot96gal/zlog/actions/workflows/ci.yml)
+[![Release](https://github.com/dot96gal/zlog/actions/workflows/release.yml/badge.svg)](https://github.com/dot96gal/zlog/actions/workflows/release.yml)
 
-Zig 向けシンプル構造化ロギングライブラリ。
+Zig のシンプルな構造化ロギングのライブラリ。
 
 - タイムスタンプ（RFC 3339）付きログ出力
 - ログレベルフィルタリング（`err` / `warn` / `info` / `debug`）
@@ -18,9 +18,11 @@ Zig 向けシンプル構造化ロギングライブラリ。
 
 - Zig 0.16.0 以上
 
-## インストール
+## 利用者向け
 
-### 1. `build.zig.zon` に zlog を追加する。
+### インストール
+
+#### 1. `build.zig.zon` に zlog を追加する。
 
 最新のタグは [GitHub Releases](https://github.com/dot96gal/zlog/releases) で確認できる。
 
@@ -40,7 +42,7 @@ zig fetch --save https://github.com/dot96gal/zlog/archive/refs/tags/<version>.ta
 },
 ```
 
-### 2. `build.zig` で zlog モジュールをインポートする。
+#### 2. `build.zig` で zlog モジュールをインポートする。
 
 ```zig
 const zlog_dep = b.dependency("zlog", .{
@@ -51,9 +53,9 @@ const zlog_mod = zlog_dep.module("zlog");
 exe.root_module.addImport("zlog", zlog_mod);
 ```
 
-## 使い方
+### 使い方
 
-### Logger の初期化
+#### Logger の初期化
 
 ```zig
 const std = @import("std");
@@ -70,7 +72,7 @@ pub fn main(init: std.process.Init) !void {
 }
 ```
 
-### ログ出力
+#### ログ出力
 
 `attrs` にはコンパイル時固定のフィールド名と実行時の値を持つ匿名構造体を渡す。
 
@@ -90,7 +92,7 @@ try logger.debug("request received", .{ .method = "GET", .path = "/api/v1/users"
 2026-04-20T12:34:56Z [DEBUG] request received method="GET" path="/api/v1/users"
 ```
 
-### JSON 形式
+#### JSON 形式
 
 ```zig
 const json_logger = logger.withFormat(.json);
@@ -103,7 +105,7 @@ try json_logger.info("user logged in", .{ .user_id = 42, .ip = "127.0.0.1" });
 {"time":"2026-04-20T12:34:56Z","level":"info","msg":"user logged in","user_id":42,"ip":"127.0.0.1"}
 ```
 
-### ロガー名（スコープ）
+#### ロガー名（スコープ）
 
 ```zig
 const db_logger = logger.withLoggerName("database");
@@ -116,7 +118,7 @@ try db_logger.info("query executed", .{ .duration_ms = 42 });
 2026-04-20T12:34:56Z [INFO] [database] query executed duration_ms=42
 ```
 
-### ログレベルフィルタリング
+#### ログレベルフィルタリング
 
 `Logger.init` の第 3 引数で最小出力レベルを指定する。指定レベルより詳細なログは出力されない。
 
@@ -125,7 +127,7 @@ try db_logger.info("query executed", .{ .duration_ms = 42 });
 const logger = zlog.Logger.init(io, writer, .info);
 ```
 
-### `with*` メソッドによる設定変更
+#### `with*` メソッドによる設定変更
 
 各 `with*` メソッドは設定を変更した**新しい Logger** を返す。元の Logger は変更されない。
 
@@ -137,22 +139,22 @@ const db_logger    = logger.withLoggerName("db");     // ロガー名付与
 const other_logger = logger.withWriter(other_writer); // 出力先変更
 ```
 
-## API リファレンス
+### API リファレンス
 
-### `Error`
+#### `Error`
 
 | 値 | 説明 |
 |----|------|
 | `WriteFailed` | 出力先への書き込みに失敗した |
 
-### `Format`
+#### `Format`
 
 | 値 | 説明 |
 |----|------|
 | `.text` | テキスト形式のログ（デフォルト） |
 | `.json` | JSON オブジェクト形式のログ |
 
-### `Logger`
+#### `Logger`
 
 | 関数 | シグネチャ | 説明 |
 |------|-----------|------|
@@ -167,13 +169,23 @@ const other_logger = logger.withWriter(other_writer); // 出力先変更
 | `info` | `(msg, attrs) Error!void` | 情報レベルでログを出力する |
 | `debug` | `(msg, attrs) Error!void` | デバッグレベルでログを出力する |
 
+---
+
 ## 開発者向け
+
+### 必要なツール
+
+| ツール | 説明 |
+|-------|------|
+| [mise](https://mise.jdx.dev/) | ツールバージョン管理（Zig・zls を自動インストール） |
+| `zig-lint` | Zig 簡易リントスクリプト（`~/.local/bin/` にインストール済み） |
+| `zig-release` | バージョン更新・タグ付けスクリプト（`~/.local/bin/` にインストール済み） |
 
 ### セットアップ
 
-[mise](https://mise.jdx.dev/) を使って Zig・ZLS のバージョンを管理している。
-
 ```sh
+git clone https://github.com/dot96gal/zlog
+cd zlog
 mise install
 ```
 
@@ -191,7 +203,7 @@ mise install
 | `mise run serve-docs` | API ドキュメントのローカルサーブ |
 | `mise run release <version>` | バージョンバンプ・コミット・タグ・プッシュ |
 
-### ディレクトリ構成
+### ファイル構成
 
 ```
 zlog/
@@ -200,16 +212,8 @@ zlog/
 │   └── logger.zig    # Logger 実装・テスト
 ├── examples/
 │   └── basic.zig     # 使用例
-├── build.zig
-└── build.zig.zon
-```
-
-### テスト
-
-テストは `src/logger.zig` 内に実装ごとに記述している。
-
-```sh
-mise run test
+├── build.zig         # ビルドスクリプト
+└── build.zig.zon     # 依存関係・パッケージ定義
 ```
 
 ### 設計方針
@@ -229,6 +233,16 @@ logger.info("user logged in", .{ .user_id = user_id, .ip = ip_str });
 **フォーマットは enum で切り替え**
 
 テキスト / JSON の 2 択を `switch` で分岐するシンプルな実装。
+
+### テスト
+
+テストは `src/logger.zig` 内に実装ごとに記述している。
+
+```sh
+mise run test
+```
+
+---
 
 ## ライセンス
 
