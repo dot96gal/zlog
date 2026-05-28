@@ -26,6 +26,15 @@ run = "zig build test --summary all"
 description = "Run basic example"
 run = "zig build run --summary all"
 
+[tasks.build-coverage]
+description = "build coverage report"
+run = "zig-coverage --output=zig-out/coverage"
+
+[tasks."serve-coverage"]
+description = "serve coverage report"
+depends = ["build-coverage"]
+run = "npx --yes http-server zig-out/coverage"
+
 [tasks.build-docs]
 description = "build API documentation"
 run = "zig build docs --summary all"

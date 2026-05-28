@@ -199,6 +199,8 @@ mise install
 | `mise run build` | ビルド |
 | `mise run test` | テスト |
 | `mise run example:basic` | basic サンプルの実行 |
+| `mise run build-coverage` | カバレッジレポートのビルド |
+| `mise run serve-coverage` | カバレッジレポートのローカルサーブ |
 | `mise run build-docs` | API ドキュメントのビルド |
 | `mise run serve-docs` | API ドキュメントのローカルサーブ |
 | `mise run release <version>` | バージョンバンプ・コミット・タグ・プッシュ |
