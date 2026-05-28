@@ -5,7 +5,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const mod = b.addModule("zlog", .{
-        .root_source_file = b.path("src/root.zig"),
+        .root_source_file = b.path("src/zlog.zig"),
         .target = target,
     });
 
@@ -40,7 +40,7 @@ pub fn build(b: *std.Build) void {
     const docs_obj = b.addObject(.{
         .name = "zlog",
         .root_module = b.createModule(.{
-            .root_source_file = b.path("src/root.zig"),
+            .root_source_file = b.path("src/zlog.zig"),
             .target = target,
             .optimize = .Debug,
         }),

@@ -208,7 +208,7 @@ mise install
 ```
 zlog/
 ├── src/
-│   ├── root.zig      # 公開 API のエクスポート
+│   ├── zlog.zig      # 公開 API のエクスポート
 │   └── logger.zig    # Logger 実装・テスト
 ├── examples/
 │   └── basic.zig     # 使用例
