@@ -8,9 +8,10 @@ Zig のシンプルな構造化ロギングのライブラリ。
 
 - タイムスタンプ（RFC 3339）付きログ出力
 - ログレベルフィルタリング（`err` / `warn` / `info` / `debug`）
-- テキスト形式・JSON 形式の切り替え
+- `log` メソッドによるログレベルの動的指定
+- テキスト形式・JSON 形式の切り替え（JSON 出力は文字列を適切にエスケープ）
 - ロガー名（スコープ）によるログの区別
-- `with*` メソッドによる不変な設定変更
+- `Logger.Options` 構造体による初期設定
 
 > **注意:** このリポジトリは個人的な興味・学習を目的としたホビーライブラリです。設計上の判断はすべて作者が個人で行っており、事前の告知なく破壊的変更が加わることがあります。安定した API を前提としたい場合は、任意のコミットやタグ時点でフォークし、独自に管理されることをおすすめします。
 
@@ -68,7 +69,7 @@ pub fn main(init: std.process.Init) !void {
     var file_writer: std.Io.File.Writer = .init(.stdout(), io, &buf);
     const writer = &file_writer.interface;
 
-    const logger = zlog.Logger.init(io, writer, .info);
+    const logger = zlog.Logger.init(io, writer, .{});
 }
 ```
 
@@ -92,10 +93,20 @@ try logger.debug("request received", .{ .method = "GET", .path = "/api/v1/users"
 2026-04-20T12:34:56Z [DEBUG] request received method="GET" path="/api/v1/users"
 ```
 
+#### ログレベルの動的指定
+
+ログレベルを実行時に決定したい場合は `log` メソッドを使う。
+
+```zig
+const level: std.log.Level = getLevel(); // 実行時に決まるレベル
+try logger.log(level, "threshold exceeded", .{ .value = 42 });
+```
+
 #### JSON 形式
 
 ```zig
-const json_logger = logger.withFormat(.json);
+var json_logger = logger;
+json_logger.options.format = .json;
 try json_logger.info("user logged in", .{ .user_id = 42, .ip = "127.0.0.1" });
 ```
 
@@ -105,10 +116,11 @@ try json_logger.info("user logged in", .{ .user_id = 42, .ip = "127.0.0.1" });
 {"time":"2026-04-20T12:34:56Z","level":"info","msg":"user logged in","user_id":42,"ip":"127.0.0.1"}
 ```
 
-#### ロガー名（スコープ）
+#### スコープ
 
 ```zig
-const db_logger = logger.withLoggerName("database");
+var db_logger = logger;
+db_logger.options.scope = "database";
 try db_logger.info("query executed", .{ .duration_ms = 42 });
 ```
 
@@ -120,50 +132,66 @@ try db_logger.info("query executed", .{ .duration_ms = 42 });
 
 #### ログレベルフィルタリング
 
-`Logger.init` の第 3 引数で最小出力レベルを指定する。指定レベルより詳細なログは出力されない。
+`Logger.Options` の `level` フィールドで最小出力レベルを指定する。指定レベルより詳細なログは出力されない。
 
 ```zig
 // .info レベル以上のみ出力（.debug は出力されない）
-const logger = zlog.Logger.init(io, writer, .info);
+const logger = zlog.Logger.init(io, writer, .{ .level = .info });
 ```
 
-#### `with*` メソッドによる設定変更
+#### `Logger.Options` による設定
 
-各 `with*` メソッドは設定を変更した**新しい Logger** を返す。元の Logger は変更されない。
+`Logger.Options` はすべてのフィールドにデフォルト値を持つ。`.{}` でデフォルト設定のまま初期化でき、必要なフィールドだけを指定できる。
 
 ```zig
-const logger = zlog.Logger.init(io, writer, .info);
-const debug_logger = logger.withLevel(.debug);       // ログレベル変更
-const json_logger  = logger.withFormat(.json);        // フォーマット変更
-const db_logger    = logger.withLoggerName("db");     // ロガー名付与
-const other_logger = logger.withWriter(other_writer); // 出力先変更
+// デフォルト（level: .info, format: .text）
+const logger = zlog.Logger.init(io, writer, .{});
+
+// オプションを指定
+const logger = zlog.Logger.init(io, writer, .{
+    .level = .debug,
+    .format = .json,
+    .scope = "api",
+});
+```
+
+初期化後にフィールドを直接変更して派生ロガーを作ることもできる。
+
+```zig
+var db_logger = logger;
+db_logger.options.scope = "database";
 ```
 
 ### API リファレンス
 
-#### `Error`
+#### `Logger.Error`
 
 | 値 | 説明 |
 |----|------|
 | `WriteFailed` | 出力先への書き込みに失敗した |
 
-#### `Format`
+#### `Logger.Format`
 
 | 値 | 説明 |
 |----|------|
 | `.text` | テキスト形式のログ（デフォルト） |
 | `.json` | JSON オブジェクト形式のログ |
 
+#### `Logger.Options`
+
+| フィールド | 型 | デフォルト | 説明 |
+|-----------|-----|-----------|------|
+| `level` | `std.log.Level` | `.info` | 最小出力レベル |
+| `format` | `Logger.Format` | `.text` | 出力形式 |
+| `scope` | `?[]const u8` | `null` | ロガー名（スコープ） |
+| `fixed_timestamp` | `?std.Io.Timestamp` | `null` | 固定タイムスタンプ（テスト用） |
+
 #### `Logger`
 
 | 関数 | シグネチャ | 説明 |
 |------|-----------|------|
-| `init` | `(io, writer, level) Logger` | Logger を生成する |
-| `withWriter` | `(writer) Logger` | 出力先を変更した新しい Logger を返す |
-| `withLevel` | `(level) Logger` | ログレベルを変更した新しい Logger を返す |
-| `withFormat` | `(format) Logger` | フォーマットを変更した新しい Logger を返す |
-| `withLoggerName` | `(name) Logger` | ロガー名を設定した新しい Logger を返す |
-| `withTimestamp` | `(ts) Logger` | 固定タイムスタンプを設定した新しい Logger を返す（テスト用） |
+| `init` | `(io, writer, options: Options) Logger` | Logger を生成する |
+| `log` | `(msg_level, msg, attrs) Error!void` | 指定レベルでログを出力する |
 | `err` | `(msg, attrs) Error!void` | エラーレベルでログを出力する |
 | `warn` | `(msg, attrs) Error!void` | 警告レベルでログを出力する |
 | `info` | `(msg, attrs) Error!void` | 情報レベルでログを出力する |
@@ -228,9 +256,9 @@ zlog/
 logger.info("user logged in", .{ .user_id = user_id, .ip = ip_str });
 ```
 
-**`with*` メソッドによる不変設定**
+**`Logger.Options` による初期設定**
 
-各 `with*` は新しい Logger を返し、元の Logger を変更しない。スコープ付きロガーを派生させやすい。
+すべてのフィールドにデフォルト値を持つ Options 構造体を `init` に渡す。シグネチャを変えずに新しいオプションを追加できる。
 
 **フォーマットは enum で切り替え**
 
