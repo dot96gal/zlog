@@ -21,8 +21,6 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
-    b.installArtifact(example_basic);
-
     const run_basic = b.addRunArtifact(example_basic);
     run_basic.step.dependOn(b.getInstallStep());
     const run_step = b.step("run", "Run the basic example");
