@@ -478,6 +478,10 @@ logfmt / JSON の 2 択を `switch` で分岐するシンプルな実装。
 
 出力先 `writer` は呼び出し元が用意して渡す。複数出力・ログ加工（複数 sink・フィルタ）は `std.Io.Writer` をラップして対応する。スレッド安全性も同様に、並行出力のためのロックは `Options.mutex` でオプトインし、書き込み〜flush 全体を囲む。mutex は呼び出し元が所有・共有し、デフォルト（`null`）はロックなし・ゼロコスト。
 
+**`io` は `init` でキャプチャする**
+
+時刻採取（`Timestamp.now`）と mutex 操作に使う `io` は、`writer`・`options` と同様 `init` で受け取り `Logger` に保持する。`std.Io.Writer` は io を内蔵するが generic interface から取り出せないため、出力以外（タイムスタンプ・mutex）に必要な io は別途受け取る必要がある。`writer` を構築したのと同じ io を保持することで I/O コンテキストの一貫性を保つ（`File.Writer` も io を `init` でキャプチャする流儀に倣う）。ログ呼び出しごとには渡さない。
+
 **`Error` は `WriteFailed` 一本**
 
 `Error` は `std.Io.Writer.Error` と一致する `error{WriteFailed}` のみ。詳細診断は具体 Writer 実装（`File.Writer` 等）が保持するという std 0.16 の新 IO 設計に従い、抽象 `writer` しか持たない zlog はエラー種別を増やさない。
