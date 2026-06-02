@@ -304,7 +304,12 @@ fn writeEntry(
     } else if (comptime isStruct(T)) {
         switch (format) {
             // logfmt はネストをドット平坦化（user.id=42）。各フィールドを別エントリとして再帰する。
-            .logfmt => inline for (std.meta.fields(T)) |field| {
+            // 空 struct は展開対象がなくキーが消えてしまうため、値内 JSON の {} で出力して
+            // キーを残す（空配列の key=[] と対称）。
+            .logfmt => if (std.meta.fields(T).len == 0) {
+                try writeKey(.logfmt, writer, name);
+                try writeJsonValue(writer, value);
+            } else inline for (std.meta.fields(T)) |field| {
                 try writeEntry(
                     .logfmt,
                     writer,
@@ -1812,6 +1817,15 @@ test "writeEntry: nested struct containing array (logfmt)" {
     try std.testing.expectEqualStrings(" user.roles=[\"admin\",\"dev\"]", buf[0..writer.end]);
 }
 
+test "writeEntry: nested empty struct keeps key (logfmt)" {
+    var buf: [64]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&buf);
+
+    try writeEntry(.logfmt, &writer, "user", .{ .meta = .{} });
+
+    try std.testing.expectEqualStrings(" user.meta={}", buf[0..writer.end]);
+}
+
 test "writeEntry: array of struct (json)" {
     const Item = struct { id: u32 };
     var buf: [128]u8 = undefined;
@@ -1835,11 +1849,11 @@ test "writeEntry: empty array and empty struct" {
             .input = .{ .fmt = Format.json, .value = [_]u32{} },
             .expected = ",\"key\":[]",
         },
-        // 空 struct は logfmt では展開対象がなく何も出力しない
+        // 空 struct は展開対象がないが、キーが消えないよう値内 JSON の {} で出力する
         .{
             .name = "empty struct logfmt",
             .input = .{ .fmt = Format.logfmt, .value = .{} },
-            .expected = "",
+            .expected = " key={}",
         },
         .{
             .name = "empty struct json",
