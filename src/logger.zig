@@ -443,7 +443,7 @@ fn writeQuotedString(writer: *std.Io.Writer, s: []const u8) Error!void {
                 '\n' => try writer.writeAll("\\n"),
                 '\r' => try writer.writeAll("\\r"),
                 '\t' => try writer.writeAll("\\t"),
-                0x00...0x08, 0x0B, 0x0C, 0x0E...0x1F => try writer.print("\\u{x:0>4}", .{c}),
+                0x00...0x08, 0x0B, 0x0C, 0x0E...0x1F, 0x7F => try writer.print("\\u{x:0>4}", .{c}),
                 else => try writer.writeByte(c),
             }
             i += 1;
@@ -506,7 +506,11 @@ fn validateAttrs(comptime T: type) void {
 
 fn validateStruct(comptime T: type, comptime noun: []const u8) void {
     switch (@typeInfo(T)) {
-        .@"struct" => {},
+        // 空の `.{}` は is_tuple=true になりうるため「要素のある位置指定タプル」だけを弾く。
+        .@"struct" => |info| if (info.is_tuple and info.fields.len > 0) {
+            @compileError(noun ++ " must use named fields, not a positional tuple;" ++
+                " use .{ .key = value }");
+        },
         else => @compileError(noun ++ " must be a struct, e.g. .{ .key = value }"),
     }
 }
@@ -534,9 +538,19 @@ fn validateName(comptime T: type, comptime noun: []const u8) void {
 // 予約名チェックはしない（平坦化でプレフィックスが付くため衝突しない）。単一ポインタは writeEntry 側で弾く。
 fn validateNestedNames(comptime T: type, comptime noun: []const u8) void {
     switch (@typeInfo(T)) {
-        .@"struct" => |info| inline for (info.fields) |field| {
-            validateNameChars(field.name, noun);
-            validateNestedNames(field.type, noun);
+        .@"struct" => |info| {
+            // 値が位置指定タプル（`.{1, 2}`）の場合、logfmt は数値キー平坦化・JSON は
+            // 数値キーオブジェクトになり利用者の期待とずれるため、両形式とも comptime で弾く。
+            // 空の `.{}` は is_tuple=true になりうるため要素数で除外する。
+            if (info.is_tuple and info.fields.len > 0) {
+                @compileError(noun ++ " contains a positional tuple value;" ++
+                    " use a named struct or an array ([_]T{...}) instead");
+            }
+
+            inline for (info.fields) |field| {
+                validateNameChars(field.name, noun);
+                validateNestedNames(field.type, noun);
+            }
         },
         .optional => |opt| validateNestedNames(opt.child, noun),
         .array => |arr| validateNestedNames(arr.child, noun),
@@ -2465,6 +2479,7 @@ test "writeQuotedString: escaping" {
         .{ .name = "vertical tab", .input = "\x0B", .expected = "\"\\u000b\"" },
         .{ .name = "control char SO (0x0E)", .input = "\x0E", .expected = "\"\\u000e\"" },
         .{ .name = "unit separator", .input = "\x1F", .expected = "\"\\u001f\"" },
+        .{ .name = "delete (0x7f)", .input = "\x7F", .expected = "\"\\u007f\"" },
         .{ .name = "valid 2-byte (é)", .input = "é", .expected = "\"é\"" },
         .{ .name = "valid 3-byte (あ)", .input = "あ", .expected = "\"あ\"" },
         .{ .name = "valid 4-byte (😀)", .input = "😀", .expected = "\"😀\"" },
@@ -2578,19 +2593,24 @@ test "validateFields: valid fields" {
 
 test "validateAttrs: valid attrs" {
     // input が type（コンパイル時専用型）のためテーブルドリブンは使用できない。
-    // エラーケース（非 struct / 予約語）は @compileError のためテスト不可。
+    // エラーケース（非 struct / 予約語 / 位置指定タプル値）は @compileError のためテスト不可。
     comptime validateAttrs(@TypeOf(.{}));
     comptime validateAttrs(@TypeOf(.{ .port = 8080 }));
     comptime validateAttrs(@TypeOf(.{ .user_id = 42, .ip = "127.0.0.1" }));
     comptime validateAttrs(@TypeOf(.{ .timestamp = 0, .log_level = "info" }));
     comptime validateAttrs(@TypeOf(.{ .scope = "app" }));
+    // ネストした named struct は通る。空の `.{}` も要素がないため通る。
+    comptime validateAttrs(@TypeOf(.{ .user = .{ .id = 42 } }));
+    comptime validateAttrs(@TypeOf(.{ .meta = .{} }));
 }
 
 // --- validateStruct ---
 
 test "validateStruct: struct types pass" {
-    // 非 struct のケースは @compileError のためテスト不可。
+    // 非 struct・要素のある位置指定タプルのケースは @compileError のためテスト不可。
+    // 空の `.{}` は is_tuple=true だが要素がないため通る。
     comptime validateStruct(struct {}, "fields");
+    comptime validateStruct(@TypeOf(.{}), "attrs");
     comptime validateStruct(@TypeOf(.{ .port = 8080 }), "attrs");
 }
 

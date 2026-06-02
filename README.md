@@ -137,6 +137,7 @@ try logger.info(label, .{});
 | optional `?T` | ○ | 値はそのまま、`null` は `key=null` / `"key":null` |
 | struct（ネスト） | ○ | logfmt はドット平坦化 `user.id=42`、JSON はネイティブ `"user":{…}` |
 | array / slice（配列） | ○ | logfmt は値内 JSON `ids=[1,2,3]`、JSON はネイティブ `"ids":[…]` |
+| 位置指定タプル `.{ 1, 2 }` | **コンパイルエラー** | 並びは配列 `[_]T{...}`、レコードは named struct を使う |
 | ポインタ `*T`・`union`・その他 | **コンパイルエラー** | 呼び出し側で変換して渡す |
 
 > **予約済みのフィールド名・属性名**
