@@ -272,35 +272,129 @@ fn writeEntry(
     value: anytype,
 ) Error!void {
     const T = @TypeOf(value);
-    if (comptime isStringLike(T)) {
-        switch (format) {
-            .logfmt => try writer.print(" {s}=", .{name}),
-            .json => try writer.print(",\"{s}\":", .{name}),
+    // 判定順序が重要：文字列（slice/pointer）は array/pointer 判定より先に弾く。
+    if (comptime isOptional(T)) {
+        if (value) |v| {
+            try writeEntry(format, writer, name, v);
+        } else {
+            try writeKey(format, writer, name);
+            try writer.writeAll("null");
         }
+    } else if (comptime isStringLike(T)) {
+        try writeKey(format, writer, name);
         try writeQuotedString(writer, value);
     } else if (comptime isIntOrBool(T)) {
-        switch (format) {
-            .logfmt => try writer.print(" {s}={}", .{ name, value }),
-            .json => try writer.print(",\"{s}\":{}", .{ name, value }),
-        }
+        try writeKey(format, writer, name);
+        try writer.print("{}", .{value});
     } else if (comptime isFloat(T)) {
+        try writeKey(format, writer, name);
         if (floatSpecialText(value)) |text| {
             // NaN/Infinity は数値として出力できないため特別な文字列で表現する。
             // JSON は NaN/Infinity をネイティブ表現できないため文字列としてクォートする。
             switch (format) {
-                .logfmt => try writer.print(" {s}={s}", .{ name, text }),
-                .json => try writer.print(",\"{s}\":\"{s}\"", .{ name, text }),
+                .logfmt => try writer.print("{s}", .{text}),
+                .json => try writer.print("\"{s}\"", .{text}),
             }
-        } else switch (format) {
-            .logfmt => try writer.print(" {s}={}", .{ name, value }),
-            .json => try writer.print(",\"{s}\":{}", .{ name, value }),
+        } else {
+            try writer.print("{}", .{value});
         }
+    } else if (comptime isEnum(T)) {
+        try writeKey(format, writer, name);
+        try writeEnum(writer, value);
+    } else if (comptime isStruct(T)) {
+        switch (format) {
+            // logfmt はネストをドット平坦化（user.id=42）。各フィールドを別エントリとして再帰する。
+            .logfmt => inline for (std.meta.fields(T)) |field| {
+                try writeEntry(
+                    .logfmt,
+                    writer,
+                    name ++ "." ++ field.name,
+                    @field(value, field.name),
+                );
+            },
+            // JSON はネイティブのオブジェクト表現。
+            .json => {
+                try writeKey(.json, writer, name);
+                try writeJsonValue(writer, value);
+            },
+        }
+    } else if (comptime isArrayLike(T)) {
+        // 配列は両形式とも value 内に JSON 配列リテラルを書く（logfmt のカーディナリティ爆発回避）。
+        try writeKey(format, writer, name);
+        try writeJsonValue(writer, value);
     } else {
         @compileError(@tagName(format) ++ " format: log field '" ++ name ++
             "' has unsupported type '" ++ @typeName(T) ++
-            "'. Supported types: int, bool, float, []const u8." ++
-            " Convert other types (enum, struct, etc.) to a supported type first," ++
-            " e.g. @tagName(value) for enums.");
+            "'. Supported types: int, bool, float, []const u8, enum, optional," ++
+            " struct (nested), array/slice." ++
+            " Convert other types first, e.g. @tagName(value) for unions," ++
+            " ptr.* to dereference pointers.");
+    }
+}
+
+// 区切り（先頭 time 以外は前置）+ キー名を書く。logfmt は " name="、JSON は ",\"name\":"。
+fn writeKey(comptime format: Format, writer: *std.Io.Writer, comptime name: []const u8) Error!void {
+    switch (format) {
+        .logfmt => try writer.print(" {s}=", .{name}),
+        .json => try writer.print(",\"{s}\":", .{name}),
+    }
+}
+
+// enum を quoted string で writer に書く。既知バリアントは @tagName、非網羅 enum の未知値は
+// unknown(数値) でフォールバック（@intFromEnum 依存で静的文字列を返せないため writer に直接書く）。
+fn writeEnum(writer: *std.Io.Writer, value: anytype) Error!void {
+    switch (@typeInfo(@TypeOf(value))) {
+        .enum_literal => try writeQuotedString(writer, @tagName(value)),
+        .@"enum" => |info| if (info.is_exhaustive) switch (value) {
+            inline else => |v| try writeQuotedString(writer, @tagName(v)),
+        } else switch (value) {
+            inline else => |v| try writeQuotedString(writer, @tagName(v)),
+            _ => try writer.print("\"unknown({d})\"", .{@intFromEnum(value)}),
+        },
+        else => @compileError(
+            "writeEnum: value must be an enum, got " ++ @typeName(@TypeOf(value)),
+        ),
+    }
+}
+
+// 値を JSON としてエンコードして書く（配列要素・JSON のネスト値で共通）。writeEntry と同じ判定順。
+fn writeJsonValue(writer: *std.Io.Writer, value: anytype) Error!void {
+    const T = @TypeOf(value);
+    if (comptime isOptional(T)) {
+        if (value) |v| {
+            try writeJsonValue(writer, v);
+        } else {
+            try writer.writeAll("null");
+        }
+    } else if (comptime isStringLike(T)) {
+        try writeQuotedString(writer, value);
+    } else if (comptime isIntOrBool(T)) {
+        try writer.print("{}", .{value});
+    } else if (comptime isFloat(T)) {
+        if (floatSpecialText(value)) |text| {
+            try writer.print("\"{s}\"", .{text});
+        } else {
+            try writer.print("{}", .{value});
+        }
+    } else if (comptime isEnum(T)) {
+        try writeEnum(writer, value);
+    } else if (comptime isStruct(T)) {
+        try writer.writeByte('{');
+        inline for (std.meta.fields(T), 0..) |field, i| {
+            if (i > 0) try writer.writeByte(',');
+            try writer.print("\"{s}\":", .{field.name});
+            try writeJsonValue(writer, @field(value, field.name));
+        }
+        try writer.writeByte('}');
+    } else if (comptime isArrayLike(T)) {
+        try writer.writeByte('[');
+        for (value, 0..) |elem, i| {
+            if (i > 0) try writer.writeByte(',');
+            try writeJsonValue(writer, elem);
+        }
+        try writer.writeByte(']');
+    } else {
+        @compileError("json value: unsupported type '" ++ @typeName(T) ++ "'");
     }
 }
 
@@ -423,6 +517,7 @@ fn validateName(comptime T: type, comptime noun: []const u8) void {
             @compileError("a " ++ noun ++ " name must not be empty");
         }
 
+        // 予約名チェックはトップレベルのみ。ネストは user.time のように平坦化され予約名と衝突しない。
         inline for (reserved_log_fields) |name| {
             if (std.mem.eql(u8, field.name, name)) {
                 @compileError(noun ++ " '" ++ field.name ++
@@ -430,13 +525,33 @@ fn validateName(comptime T: type, comptime noun: []const u8) void {
             }
         }
 
-        // logfmt（key=value）・JSON（"key":value）のどちらの出力も壊さない文字に限定する。
-        // 名前はコンパイル時に確定するため @compileError で弾き、ランタイムコストを持たない。
-        for (field.name) |c| {
-            if (!isValidNameChar(c)) {
-                @compileError(noun ++ " '" ++ field.name ++
-                    "' contains an invalid character; use only [A-Za-z0-9_.-]");
-            }
+        validateNameChars(field.name, noun);
+        validateNestedNames(field.type, noun);
+    }
+}
+
+// ネストした struct/optional/array/slice の中身を再帰的にたどり、フィールド名の使用文字を検証する。
+// 予約名チェックはしない（平坦化でプレフィックスが付くため衝突しない）。単一ポインタは writeEntry 側で弾く。
+fn validateNestedNames(comptime T: type, comptime noun: []const u8) void {
+    switch (@typeInfo(T)) {
+        .@"struct" => |info| inline for (info.fields) |field| {
+            validateNameChars(field.name, noun);
+            validateNestedNames(field.type, noun);
+        },
+        .optional => |opt| validateNestedNames(opt.child, noun),
+        .array => |arr| validateNestedNames(arr.child, noun),
+        .pointer => |ptr| if (ptr.size == .slice) validateNestedNames(ptr.child, noun),
+        else => {},
+    }
+}
+
+// logfmt（key=value）・JSON（"key":value）のどちらの出力も壊さない文字に限定する。
+// 名前はコンパイル時に確定するため @compileError で弾き、ランタイムコストを持たない。
+fn validateNameChars(comptime name: []const u8, comptime noun: []const u8) void {
+    for (name) |c| {
+        if (!isValidNameChar(c)) {
+            @compileError(noun ++ " '" ++ name ++
+                "' contains an invalid character; use only [A-Za-z0-9_.-]");
         }
     }
 }
@@ -478,6 +593,30 @@ fn isFloat(comptime T: type) bool {
         .float, .comptime_float => true,
         else => false,
     };
+}
+
+fn isEnum(comptime T: type) bool {
+    return switch (@typeInfo(T)) {
+        .@"enum", .enum_literal => true,
+        else => false,
+    };
+}
+
+fn isStruct(comptime T: type) bool {
+    return @typeInfo(T) == .@"struct";
+}
+
+fn isArrayLike(comptime T: type) bool {
+    // 文字列（[]const u8 / *const [N]u8）は呼び出し側が isStringLike を先に判定して除外する。
+    return switch (@typeInfo(T)) {
+        .array => true,
+        .pointer => |ptr| ptr.size == .slice,
+        else => false,
+    };
+}
+
+fn isOptional(comptime T: type) bool {
+    return @typeInfo(T) == .optional;
 }
 
 fn isValidNameChar(c: u8) bool {
@@ -1985,6 +2124,7 @@ test "writeLevel: write fails" {
 
 test "writeEntry: logfmt format" {
     // input の型がケースごとに異なるため [_]struct + for では扱えず、comptime タプル + inline for を使用する
+    const Status = enum { active, idle };
     const test_cases = .{
         .{ .name = "string", .input = "hello", .expected = " key=\"hello\"" },
         .{ .name = "int", .input = @as(u32, 42), .expected = " key=42" },
@@ -1994,6 +2134,15 @@ test "writeEntry: logfmt format" {
         .{ .name = "NaN", .input = std.math.nan(f64), .expected = " key=NaN" },
         .{ .name = "+Inf", .input = std.math.inf(f64), .expected = " key=+Inf" },
         .{ .name = "-Inf", .input = -std.math.inf(f64), .expected = " key=-Inf" },
+        .{ .name = "enum", .input = Status.active, .expected = " key=\"active\"" },
+        .{ .name = "optional value", .input = @as(?u32, 42), .expected = " key=42" },
+        .{ .name = "optional null", .input = @as(?u32, null), .expected = " key=null" },
+        .{ .name = "array", .input = [_]u32{ 1, 2, 3 }, .expected = " key=[1,2,3]" },
+        .{
+            .name = "nested struct",
+            .input = .{ .id = @as(u32, 7), .name = "x" },
+            .expected = " key.id=7 key.name=\"x\"",
+        },
     };
 
     inline for (test_cases) |tc| {
@@ -2010,6 +2159,7 @@ test "writeEntry: logfmt format" {
 
 test "writeEntry: json format" {
     // input の型がケースごとに異なるため [_]struct + for では扱えず、comptime タプル + inline for を使用する
+    const Status = enum { active, idle };
     const test_cases = .{
         .{ .name = "string", .input = "hello", .expected = ",\"key\":\"hello\"" },
         .{ .name = "int", .input = @as(u32, 42), .expected = ",\"key\":42" },
@@ -2019,6 +2169,15 @@ test "writeEntry: json format" {
         .{ .name = "NaN", .input = std.math.nan(f64), .expected = ",\"key\":\"NaN\"" },
         .{ .name = "+Inf", .input = std.math.inf(f64), .expected = ",\"key\":\"+Inf\"" },
         .{ .name = "-Inf", .input = -std.math.inf(f64), .expected = ",\"key\":\"-Inf\"" },
+        .{ .name = "enum", .input = Status.active, .expected = ",\"key\":\"active\"" },
+        .{ .name = "optional value", .input = @as(?u32, 42), .expected = ",\"key\":42" },
+        .{ .name = "optional null", .input = @as(?u32, null), .expected = ",\"key\":null" },
+        .{ .name = "array", .input = [_]u32{ 1, 2, 3 }, .expected = ",\"key\":[1,2,3]" },
+        .{
+            .name = "nested struct",
+            .input = .{ .id = @as(u32, 7), .name = "x" },
+            .expected = ",\"key\":{\"id\":7,\"name\":\"x\"}",
+        },
     };
 
     inline for (test_cases) |tc| {
@@ -2040,6 +2199,164 @@ test "writeEntry: write fails" {
         error.WriteFailed,
         writeEntry(.logfmt, &writer, "key", "value"),
     );
+}
+
+test "writeEntry: nested struct containing array (logfmt)" {
+    var buf: [128]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&buf);
+
+    try writeEntry(.logfmt, &writer, "user", .{ .roles = [_][]const u8{ "admin", "dev" } });
+
+    try std.testing.expectEqualStrings(" user.roles=[\"admin\",\"dev\"]", buf[0..writer.end]);
+}
+
+test "writeEntry: array of struct (json)" {
+    const Item = struct { id: u32 };
+    var buf: [128]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&buf);
+
+    try writeEntry(.json, &writer, "items", [_]Item{ .{ .id = 1 }, .{ .id = 2 } });
+
+    try std.testing.expectEqualStrings(",\"items\":[{\"id\":1},{\"id\":2}]", buf[0..writer.end]);
+}
+
+test "writeEntry: empty array and empty struct" {
+    // input の型・format がケースごとに異なるため comptime タプル + inline for を使用する
+    const test_cases = .{
+        .{
+            .name = "empty array logfmt",
+            .input = .{ .fmt = Format.logfmt, .value = [_]u32{} },
+            .expected = " key=[]",
+        },
+        .{
+            .name = "empty array json",
+            .input = .{ .fmt = Format.json, .value = [_]u32{} },
+            .expected = ",\"key\":[]",
+        },
+        // 空 struct は logfmt では展開対象がなく何も出力しない
+        .{
+            .name = "empty struct logfmt",
+            .input = .{ .fmt = Format.logfmt, .value = .{} },
+            .expected = "",
+        },
+        .{
+            .name = "empty struct json",
+            .input = .{ .fmt = Format.json, .value = .{} },
+            .expected = ",\"key\":{}",
+        },
+    };
+
+    inline for (test_cases) |tc| {
+        errdefer std.debug.print("FAIL: {s}\n", .{tc.name});
+
+        var buf: [32]u8 = undefined;
+        var writer = std.Io.Writer.fixed(&buf);
+
+        try writeEntry(tc.input.fmt, &writer, "key", tc.input.value);
+
+        try std.testing.expectEqualStrings(tc.expected, buf[0..writer.end]);
+    }
+}
+
+// --- writeKey ---
+
+test "writeKey: logfmt format" {
+    var buf: [16]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&buf);
+
+    try writeKey(.logfmt, &writer, "key");
+
+    try std.testing.expectEqualStrings(" key=", buf[0..writer.end]);
+}
+
+test "writeKey: json format" {
+    var buf: [16]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&buf);
+
+    try writeKey(.json, &writer, "key");
+
+    try std.testing.expectEqualStrings(",\"key\":", buf[0..writer.end]);
+}
+
+test "writeKey: write fails" {
+    var writer = std.Io.Writer.failing;
+
+    try std.testing.expectError(error.WriteFailed, writeKey(.logfmt, &writer, "key"));
+}
+
+// --- writeEnum ---
+
+test "writeEnum: exhaustive enum" {
+    const Status = enum { active, idle };
+    var buf: [32]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&buf);
+
+    try writeEnum(&writer, Status.active);
+
+    try std.testing.expectEqualStrings("\"active\"", buf[0..writer.end]);
+}
+
+test "writeEnum: non-exhaustive known value" {
+    const Code = enum(u8) { ok = 0, _ };
+    var buf: [32]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&buf);
+
+    try writeEnum(&writer, Code.ok);
+
+    try std.testing.expectEqualStrings("\"ok\"", buf[0..writer.end]);
+}
+
+test "writeEnum: non-exhaustive unknown value" {
+    const Code = enum(u8) { ok = 0, _ };
+    var buf: [32]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&buf);
+
+    try writeEnum(&writer, @as(Code, @enumFromInt(99)));
+
+    try std.testing.expectEqualStrings("\"unknown(99)\"", buf[0..writer.end]);
+}
+
+test "writeEnum: write fails" {
+    const Status = enum { active };
+    var writer = std.Io.Writer.failing;
+
+    try std.testing.expectError(error.WriteFailed, writeEnum(&writer, Status.active));
+}
+
+// --- writeJsonValue ---
+
+test "writeJsonValue: types" {
+    const Status = enum { active };
+    const test_cases = .{
+        .{ .name = "int", .input = @as(u32, 42), .expected = "42" },
+        .{ .name = "bool", .input = true, .expected = "true" },
+        .{ .name = "string", .input = "hi", .expected = "\"hi\"" },
+        .{ .name = "float", .input = @as(f64, 1.5), .expected = "1.5" },
+        .{ .name = "NaN", .input = std.math.nan(f64), .expected = "\"NaN\"" },
+        .{ .name = "enum", .input = Status.active, .expected = "\"active\"" },
+        .{ .name = "optional null", .input = @as(?u32, null), .expected = "null" },
+        .{ .name = "optional value", .input = @as(?u32, 5), .expected = "5" },
+        .{ .name = "array", .input = [_]u32{ 1, 2 }, .expected = "[1,2]" },
+        .{ .name = "struct", .input = .{ .id = @as(u32, 1) }, .expected = "{\"id\":1}" },
+        .{ .name = "nested", .input = .{ .a = .{ .b = 2 } }, .expected = "{\"a\":{\"b\":2}}" },
+    };
+
+    inline for (test_cases) |tc| {
+        errdefer std.debug.print("FAIL: {s}\n", .{tc.name});
+
+        var buf: [64]u8 = undefined;
+        var writer = std.Io.Writer.fixed(&buf);
+
+        try writeJsonValue(&writer, tc.input);
+
+        try std.testing.expectEqualStrings(tc.expected, buf[0..writer.end]);
+    }
+}
+
+test "writeJsonValue: write fails" {
+    var writer = std.Io.Writer.failing;
+
+    try std.testing.expectError(error.WriteFailed, writeJsonValue(&writer, @as(u32, 1)));
 }
 
 // --- writeLineTerminator ---
