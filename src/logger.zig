@@ -977,56 +977,6 @@ test "Logger.log: JSON format level labels" {
 
 // --- Logger.err ---
 
-test "Logger.err" {
-    const test_cases = [_]struct {
-        name: []const u8,
-        input: Format,
-        expected: []const u8,
-    }{
-        .{
-            .name = "logfmt format",
-            .input = .logfmt,
-            .expected = "time=\"1970-01-01T00:00:00.000Z\" level=error msg=\"something failed\"\n",
-        },
-        .{
-            .name = "JSON format",
-            .input = .json,
-            .expected = "{\"time\":\"1970-01-01T00:00:00.000Z\",\"level\":\"error\"," ++
-                "\"msg\":\"something failed\"}\n",
-        },
-    };
-
-    for (test_cases) |tc| {
-        errdefer std.debug.print("FAIL: {s}\n", .{tc.name});
-
-        var buf: [256]u8 = undefined;
-        var writer = std.Io.Writer.fixed(&buf);
-        const ts = std.Io.Timestamp.fromNanoseconds(0);
-        const logger = Logger(struct {}).init(
-            std.testing.io,
-            &writer,
-            .{ .level = .err, .format = tc.input },
-            .{},
-        );
-
-        try logger.logWithTimestamp(.err, ts, "something failed", .{});
-
-        try std.testing.expectEqualStrings(tc.expected, buf[0..writer.end]);
-    }
-}
-
-test "Logger.err: level" {
-    var buf: [256]u8 = undefined;
-    var writer = std.Io.Writer.fixed(&buf);
-    const ts = std.Io.Timestamp.fromNanoseconds(0);
-    const logger = Logger(struct {}).init(std.testing.io, &writer, .{}, .{});
-    try logger.logWithTimestamp(.err, ts, "msg", .{});
-    try std.testing.expectEqualStrings(
-        "time=\"1970-01-01T00:00:00.000Z\" level=error msg=\"msg\"\n",
-        buf[0..writer.end],
-    );
-}
-
 test "Logger.err: shorthand" {
     var buf: [256]u8 = undefined;
     var writer = std.Io.Writer.fixed(&buf);
@@ -1042,56 +992,6 @@ test "Logger.err: write fails" {
 }
 
 // --- Logger.warn ---
-
-test "Logger.warn" {
-    const test_cases = [_]struct {
-        name: []const u8,
-        input: Format,
-        expected: []const u8,
-    }{
-        .{
-            .name = "logfmt format",
-            .input = .logfmt,
-            .expected = "time=\"1970-01-01T00:00:00.000Z\" level=warning msg=\"disk full\"\n",
-        },
-        .{
-            .name = "JSON format",
-            .input = .json,
-            .expected = "{\"time\":\"1970-01-01T00:00:00.000Z\",\"level\":\"warning\"," ++
-                "\"msg\":\"disk full\"}\n",
-        },
-    };
-
-    for (test_cases) |tc| {
-        errdefer std.debug.print("FAIL: {s}\n", .{tc.name});
-
-        var buf: [256]u8 = undefined;
-        var writer = std.Io.Writer.fixed(&buf);
-        const ts = std.Io.Timestamp.fromNanoseconds(0);
-        const logger = Logger(struct {}).init(
-            std.testing.io,
-            &writer,
-            .{ .level = .warn, .format = tc.input },
-            .{},
-        );
-
-        try logger.logWithTimestamp(.warn, ts, "disk full", .{});
-
-        try std.testing.expectEqualStrings(tc.expected, buf[0..writer.end]);
-    }
-}
-
-test "Logger.warn: level" {
-    var buf: [256]u8 = undefined;
-    var writer = std.Io.Writer.fixed(&buf);
-    const ts = std.Io.Timestamp.fromNanoseconds(0);
-    const logger = Logger(struct {}).init(std.testing.io, &writer, .{}, .{});
-    try logger.logWithTimestamp(.warn, ts, "msg", .{});
-    try std.testing.expectEqualStrings(
-        "time=\"1970-01-01T00:00:00.000Z\" level=warning msg=\"msg\"\n",
-        buf[0..writer.end],
-    );
-}
 
 test "Logger.warn: shorthand" {
     var buf: [256]u8 = undefined;
@@ -1109,295 +1009,6 @@ test "Logger.warn: write fails" {
 
 // --- Logger.info ---
 
-test "Logger.info: no attrs" {
-    const test_cases = [_]struct {
-        name: []const u8,
-        input: Format,
-        expected: []const u8,
-    }{
-        .{
-            .name = "logfmt format",
-            .input = .logfmt,
-            .expected = "time=\"1970-01-01T00:00:00.000Z\" level=info msg=\"server started\"\n",
-        },
-        .{
-            .name = "JSON format",
-            .input = .json,
-            .expected = "{\"time\":\"1970-01-01T00:00:00.000Z\",\"level\":\"info\"," ++
-                "\"msg\":\"server started\"}\n",
-        },
-    };
-
-    for (test_cases) |tc| {
-        errdefer std.debug.print("FAIL: {s}\n", .{tc.name});
-
-        var buf: [256]u8 = undefined;
-        var writer = std.Io.Writer.fixed(&buf);
-        const ts = std.Io.Timestamp.fromNanoseconds(0);
-        const logger = Logger(struct {}).init(
-            std.testing.io,
-            &writer,
-            .{ .format = tc.input },
-            .{},
-        );
-
-        try logger.logWithTimestamp(.info, ts, "server started", .{});
-
-        try std.testing.expectEqualStrings(tc.expected, buf[0..writer.end]);
-    }
-}
-
-test "Logger.info: int attr" {
-    const test_cases = [_]struct {
-        name: []const u8,
-        input: Format,
-        expected: []const u8,
-    }{
-        .{
-            .name = "logfmt format",
-            .input = .logfmt,
-            .expected = "time=\"1970-01-01T00:00:00.000Z\"" ++
-                " level=info msg=\"server started\" port=8080\n",
-        },
-        .{
-            .name = "JSON format",
-            .input = .json,
-            .expected = "{\"time\":\"1970-01-01T00:00:00.000Z\",\"level\":\"info\"," ++
-                "\"msg\":\"server started\",\"port\":8080}\n",
-        },
-    };
-
-    for (test_cases) |tc| {
-        errdefer std.debug.print("FAIL: {s}\n", .{tc.name});
-
-        var buf: [256]u8 = undefined;
-        var writer = std.Io.Writer.fixed(&buf);
-        const ts = std.Io.Timestamp.fromNanoseconds(0);
-        const logger = Logger(struct {}).init(
-            std.testing.io,
-            &writer,
-            .{ .format = tc.input },
-            .{},
-        );
-
-        try logger.logWithTimestamp(.info, ts, "server started", .{ .port = 8080 });
-
-        try std.testing.expectEqualStrings(tc.expected, buf[0..writer.end]);
-    }
-}
-
-test "Logger.info: string attr" {
-    const test_cases = [_]struct {
-        name: []const u8,
-        input: Format,
-        expected: []const u8,
-    }{
-        .{
-            .name = "logfmt format",
-            .input = .logfmt,
-            .expected = "time=\"1970-01-01T00:00:00.000Z\"" ++
-                " level=info msg=\"user logged in\" ip=\"127.0.0.1\"\n",
-        },
-        .{
-            .name = "JSON format",
-            .input = .json,
-            .expected = "{\"time\":\"1970-01-01T00:00:00.000Z\",\"level\":\"info\"," ++
-                "\"msg\":\"user logged in\",\"ip\":\"127.0.0.1\"}\n",
-        },
-    };
-
-    for (test_cases) |tc| {
-        errdefer std.debug.print("FAIL: {s}\n", .{tc.name});
-
-        var buf: [256]u8 = undefined;
-        var writer = std.Io.Writer.fixed(&buf);
-        const ts = std.Io.Timestamp.fromNanoseconds(0);
-        const logger = Logger(struct {}).init(
-            std.testing.io,
-            &writer,
-            .{ .format = tc.input },
-            .{},
-        );
-
-        try logger.logWithTimestamp(.info, ts, "user logged in", .{ .ip = "127.0.0.1" });
-
-        try std.testing.expectEqualStrings(tc.expected, buf[0..writer.end]);
-    }
-}
-
-test "Logger.info: bool attr" {
-    const test_cases = [_]struct {
-        name: []const u8,
-        input: Format,
-        expected: []const u8,
-    }{
-        .{
-            .name = "logfmt format",
-            .input = .logfmt,
-            .expected = "time=\"1970-01-01T00:00:00.000Z\"" ++
-                " level=info msg=\"server started\" enabled=true\n",
-        },
-        .{
-            .name = "JSON format",
-            .input = .json,
-            .expected = "{\"time\":\"1970-01-01T00:00:00.000Z\",\"level\":\"info\"," ++
-                "\"msg\":\"server started\",\"enabled\":true}\n",
-        },
-    };
-
-    for (test_cases) |tc| {
-        errdefer std.debug.print("FAIL: {s}\n", .{tc.name});
-
-        var buf: [256]u8 = undefined;
-        var writer = std.Io.Writer.fixed(&buf);
-        const ts = std.Io.Timestamp.fromNanoseconds(0);
-        const logger = Logger(struct {}).init(
-            std.testing.io,
-            &writer,
-            .{ .format = tc.input },
-            .{},
-        );
-
-        try logger.logWithTimestamp(.info, ts, "server started", .{ .enabled = true });
-
-        try std.testing.expectEqualStrings(tc.expected, buf[0..writer.end]);
-    }
-}
-
-test "Logger.info: multiple attrs" {
-    const test_cases = [_]struct {
-        name: []const u8,
-        input: Format,
-        expected: []const u8,
-    }{
-        .{
-            .name = "logfmt format",
-            .input = .logfmt,
-            .expected = "time=\"1970-01-01T00:00:00.000Z\"" ++
-                " level=info msg=\"user logged in\" user_id=42 ip=\"127.0.0.1\"\n",
-        },
-        .{
-            .name = "JSON format",
-            .input = .json,
-            .expected = "{\"time\":\"1970-01-01T00:00:00.000Z\",\"level\":\"info\"," ++
-                "\"msg\":\"user logged in\",\"user_id\":42,\"ip\":\"127.0.0.1\"}\n",
-        },
-    };
-
-    for (test_cases) |tc| {
-        errdefer std.debug.print("FAIL: {s}\n", .{tc.name});
-
-        var buf: [256]u8 = undefined;
-        var writer = std.Io.Writer.fixed(&buf);
-        const ts = std.Io.Timestamp.fromNanoseconds(0);
-        const logger = Logger(struct {}).init(
-            std.testing.io,
-            &writer,
-            .{ .format = tc.input },
-            .{},
-        );
-
-        try logger.logWithTimestamp(
-            .info,
-            ts,
-            "user logged in",
-            .{ .user_id = 42, .ip = "127.0.0.1" },
-        );
-
-        try std.testing.expectEqualStrings(tc.expected, buf[0..writer.end]);
-    }
-}
-
-test "Logger.info: with scope" {
-    const test_cases = [_]struct {
-        name: []const u8,
-        input: Format,
-        expected: []const u8,
-    }{
-        .{
-            .name = "logfmt format",
-            .input = .logfmt,
-            .expected = "time=\"1970-01-01T00:00:00.000Z\"" ++
-                " level=info scope=\"database\" msg=\"server started\" port=8080\n",
-        },
-        .{
-            .name = "JSON format",
-            .input = .json,
-            .expected = "{\"time\":\"1970-01-01T00:00:00.000Z\",\"level\":\"info\"," ++
-                "\"scope\":\"database\",\"msg\":\"server started\",\"port\":8080}\n",
-        },
-    };
-
-    const Fields = struct { scope: []const u8 };
-
-    for (test_cases) |tc| {
-        errdefer std.debug.print("FAIL: {s}\n", .{tc.name});
-
-        var buf: [256]u8 = undefined;
-        var writer = std.Io.Writer.fixed(&buf);
-        const ts = std.Io.Timestamp.fromNanoseconds(0);
-        const logger = Logger(Fields).init(
-            std.testing.io,
-            &writer,
-            .{ .format = tc.input },
-            .{ .scope = "database" },
-        );
-
-        try logger.logWithTimestamp(.info, ts, "server started", .{ .port = 8080 });
-
-        try std.testing.expectEqualStrings(tc.expected, buf[0..writer.end]);
-    }
-}
-
-test "Logger.info: empty message" {
-    const test_cases = [_]struct {
-        name: []const u8,
-        input: Format,
-        expected: []const u8,
-    }{
-        .{
-            .name = "logfmt format",
-            .input = .logfmt,
-            .expected = "time=\"1970-01-01T00:00:00.000Z\" level=info msg=\"\"\n",
-        },
-        .{
-            .name = "JSON format",
-            .input = .json,
-            .expected = "{\"time\":\"1970-01-01T00:00:00.000Z\",\"level\":\"info\",\"msg\":\"\"}\n",
-        },
-    };
-
-    for (test_cases) |tc| {
-        errdefer std.debug.print("FAIL: {s}\n", .{tc.name});
-
-        var buf: [256]u8 = undefined;
-        var writer = std.Io.Writer.fixed(&buf);
-        const ts = std.Io.Timestamp.fromNanoseconds(0);
-        const logger = Logger(struct {}).init(
-            std.testing.io,
-            &writer,
-            .{ .format = tc.input },
-            .{},
-        );
-
-        try logger.logWithTimestamp(.info, ts, "", .{});
-
-        try std.testing.expectEqualStrings(tc.expected, buf[0..writer.end]);
-    }
-}
-
-test "Logger.info: level" {
-    var buf: [256]u8 = undefined;
-    var writer = std.Io.Writer.fixed(&buf);
-    const ts = std.Io.Timestamp.fromNanoseconds(0);
-    const logger = Logger(struct {}).init(std.testing.io, &writer, .{}, .{});
-    try logger.logWithTimestamp(.info, ts, "msg", .{});
-    try std.testing.expectEqualStrings(
-        "time=\"1970-01-01T00:00:00.000Z\" level=info msg=\"msg\"\n",
-        buf[0..writer.end],
-    );
-}
-
 test "Logger.info: shorthand" {
     var buf: [256]u8 = undefined;
     var writer = std.Io.Writer.fixed(&buf);
@@ -1413,56 +1024,6 @@ test "Logger.info: write fails" {
 }
 
 // --- Logger.debug ---
-
-test "Logger.debug" {
-    const test_cases = [_]struct {
-        name: []const u8,
-        input: Format,
-        expected: []const u8,
-    }{
-        .{
-            .name = "logfmt format",
-            .input = .logfmt,
-            .expected = "time=\"1970-01-01T00:00:00.000Z\" level=debug msg=\"verbose info\"\n",
-        },
-        .{
-            .name = "JSON format",
-            .input = .json,
-            .expected = "{\"time\":\"1970-01-01T00:00:00.000Z\",\"level\":\"debug\"," ++
-                "\"msg\":\"verbose info\"}\n",
-        },
-    };
-
-    for (test_cases) |tc| {
-        errdefer std.debug.print("FAIL: {s}\n", .{tc.name});
-
-        var buf: [256]u8 = undefined;
-        var writer = std.Io.Writer.fixed(&buf);
-        const ts = std.Io.Timestamp.fromNanoseconds(0);
-        const logger = Logger(struct {}).init(
-            std.testing.io,
-            &writer,
-            .{ .level = .debug, .format = tc.input },
-            .{},
-        );
-
-        try logger.logWithTimestamp(.debug, ts, "verbose info", .{});
-
-        try std.testing.expectEqualStrings(tc.expected, buf[0..writer.end]);
-    }
-}
-
-test "Logger.debug: level" {
-    var buf: [256]u8 = undefined;
-    var writer = std.Io.Writer.fixed(&buf);
-    const ts = std.Io.Timestamp.fromNanoseconds(0);
-    const logger = Logger(struct {}).init(std.testing.io, &writer, .{ .level = .debug }, .{});
-    try logger.logWithTimestamp(.debug, ts, "msg", .{});
-    try std.testing.expectEqualStrings(
-        "time=\"1970-01-01T00:00:00.000Z\" level=debug msg=\"msg\"\n",
-        buf[0..writer.end],
-    );
-}
 
 test "Logger.debug: shorthand" {
     var buf: [256]u8 = undefined;
@@ -1710,6 +1271,33 @@ test "writeLine: logfmt,no attrs" {
         "time=\"1970-01-01T00:00:00.000Z\" level=info msg=\"server started\"\n",
         buf[0..writer.end],
     );
+}
+
+test "writeLine: empty msg" {
+    // format が comptime 引数のため comptime タプル + inline for を使用する。
+    const test_cases = .{
+        .{
+            .name = "logfmt",
+            .input = Format.logfmt,
+            .expected = "time=\"1970-01-01T00:00:00.000Z\" level=info msg=\"\"\n",
+        },
+        .{
+            .name = "json",
+            .input = Format.json,
+            .expected = "{\"time\":\"1970-01-01T00:00:00.000Z\",\"level\":\"info\",\"msg\":\"\"}\n",
+        },
+    };
+
+    inline for (test_cases) |tc| {
+        errdefer std.debug.print("FAIL: {s}\n", .{tc.name});
+
+        var buf: [256]u8 = undefined;
+        var writer = std.Io.Writer.fixed(&buf);
+
+        try writeLine(tc.input, &writer, .info, std.Io.Timestamp.fromNanoseconds(0), .{}, "", .{});
+
+        try std.testing.expectEqualStrings(tc.expected, buf[0..writer.end]);
+    }
 }
 
 test "writeLine: logfmt,with fields" {
