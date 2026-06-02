@@ -57,19 +57,22 @@ pub fn Logger(comptime FieldsType: type) type {
         fields: FieldsType,
 
         /// Logger を生成する。`io`・`writer` が出力先、`options` が設定、
-        /// `fields` がロガーレベルのフィールド値。
+        /// `fields` がロガーレベルのフィールド値。フィールド名が空・予約名（time/level/msg）・
+        /// 不正文字を含む場合はコンパイルエラーになる。
         pub fn init(
             io: std.Io,
             writer: *std.Io.Writer,
             options: Options,
             fields: FieldsType,
         ) @This() {
+            comptime validateFields(FieldsType);
+
             return .{ .io = io, .writer = writer, .options = options, .fields = fields };
         }
 
         /// 既存のフィールドに `extra` を追加した子ロガーを生成する。親と追加分の型を
-        /// コンパイル時にマージした新しい Logger 型を返す。フィールド名が重複する場合は
-        /// コンパイルエラーになる。
+        /// コンパイル時にマージした新しい Logger 型を返す。フィールド名が重複する場合や、
+        /// 追加分が空・予約名（time/level/msg）・不正文字を含む場合はコンパイルエラーになる。
         pub fn withFields(
             self: @This(),
             extra: anytype,
@@ -494,6 +497,8 @@ fn floatSpecialText(value: anytype) ?[]const u8 {
 }
 
 fn validateLogArgs(comptime FieldsType: type, comptime AttrsType: type) void {
+    // fields は通常 init で検証済みだが、構造体リテラルで init を経由せず直接構築された
+    // ロガーのための backstop として再検証する（comptime のみ・ランタイムコストなし）。
     validateFields(FieldsType);
     validateAttrs(AttrsType);
     validateFieldsAttrsConflict(FieldsType, AttrsType);
