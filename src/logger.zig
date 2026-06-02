@@ -676,6 +676,7 @@ test "Format.write" {
 
         var buf: [256]u8 = undefined;
         var writer = std.Io.Writer.fixed(&buf);
+
         try tc.input.write(
             &writer,
             .info,
@@ -1747,6 +1748,7 @@ test "writeEntry: logfmt format" {
         .{ .name = "+Inf", .input = std.math.inf(f64), .expected = " key=+Inf" },
         .{ .name = "-Inf", .input = -std.math.inf(f64), .expected = " key=-Inf" },
         .{ .name = "enum", .input = Status.active, .expected = " key=\"active\"" },
+        .{ .name = "enum literal", .input = .active, .expected = " key=\"active\"" },
         .{ .name = "optional value", .input = @as(?u32, 42), .expected = " key=42" },
         .{ .name = "optional null", .input = @as(?u32, null), .expected = " key=null" },
         .{ .name = "array", .input = [_]u32{ 1, 2, 3 }, .expected = " key=[1,2,3]" },
@@ -1782,6 +1784,7 @@ test "writeEntry: json format" {
         .{ .name = "+Inf", .input = std.math.inf(f64), .expected = ",\"key\":\"+Inf\"" },
         .{ .name = "-Inf", .input = -std.math.inf(f64), .expected = ",\"key\":\"-Inf\"" },
         .{ .name = "enum", .input = Status.active, .expected = ",\"key\":\"active\"" },
+        .{ .name = "enum literal", .input = .active, .expected = ",\"key\":\"active\"" },
         .{ .name = "optional value", .input = @as(?u32, 42), .expected = ",\"key\":42" },
         .{ .name = "optional null", .input = @as(?u32, null), .expected = ",\"key\":null" },
         .{ .name = "array", .input = [_]u32{ 1, 2, 3 }, .expected = ",\"key\":[1,2,3]" },
@@ -1955,6 +1958,7 @@ test "writeJsonValue: types" {
         .{ .name = "float", .input = @as(f64, 1.5), .expected = "1.5" },
         .{ .name = "NaN", .input = std.math.nan(f64), .expected = "\"NaN\"" },
         .{ .name = "enum", .input = Status.active, .expected = "\"active\"" },
+        .{ .name = "enum literal", .input = .active, .expected = "\"active\"" },
         .{ .name = "optional null", .input = @as(?u32, null), .expected = "null" },
         .{ .name = "optional value", .input = @as(?u32, 5), .expected = "5" },
         .{ .name = "array", .input = [_]u32{ 1, 2 }, .expected = "[1,2]" },
@@ -2046,6 +2050,7 @@ test "writeRfc3339" {
 
     for (test_cases) |tc| {
         errdefer std.debug.print("FAIL: {s}\n", .{tc.name});
+
         var buf: [32]u8 = undefined;
         var writer = std.Io.Writer.fixed(&buf);
 
@@ -2133,6 +2138,7 @@ test "levelText" {
 
     for (test_cases) |tc| {
         errdefer std.debug.print("FAIL: {s}\n", .{tc.name});
+
         try std.testing.expectEqualStrings(tc.expected, levelText(tc.input));
     }
 }
@@ -2314,6 +2320,83 @@ test "isFloat" {
         errdefer std.debug.print("FAIL: {s}\n", .{tc.name});
 
         try std.testing.expectEqual(tc.expected, isFloat(tc.input));
+    }
+}
+
+// --- isEnum ---
+
+test "isEnum" {
+    // input が type（コンパイル時専用型）のため [_]struct + for では扱えず、comptime タプル + inline for を使用する
+    const test_cases = .{
+        .{ .name = "enum", .input = enum { active, idle }, .expected = true },
+        .{ .name = "enum_literal", .input = @TypeOf(.active), .expected = true },
+        .{ .name = "u32", .input = u32, .expected = false },
+        .{ .name = "struct", .input = struct { x: u32 }, .expected = false },
+        .{ .name = "[]const u8", .input = []const u8, .expected = false },
+    };
+
+    inline for (test_cases) |tc| {
+        errdefer std.debug.print("FAIL: {s}\n", .{tc.name});
+
+        try std.testing.expectEqual(tc.expected, isEnum(tc.input));
+    }
+}
+
+// --- isStruct ---
+
+test "isStruct" {
+    // input が type（コンパイル時専用型）のため [_]struct + for では扱えず、comptime タプル + inline for を使用する
+    const test_cases = .{
+        .{ .name = "struct", .input = struct { x: u32 }, .expected = true },
+        .{ .name = "empty struct", .input = struct {}, .expected = true },
+        .{ .name = "u32", .input = u32, .expected = false },
+        .{ .name = "enum", .input = enum { active, idle }, .expected = false },
+        .{ .name = "[]const u8", .input = []const u8, .expected = false },
+    };
+
+    inline for (test_cases) |tc| {
+        errdefer std.debug.print("FAIL: {s}\n", .{tc.name});
+
+        try std.testing.expectEqual(tc.expected, isStruct(tc.input));
+    }
+}
+
+// --- isArrayLike ---
+
+test "isArrayLike" {
+    // input が type（コンパイル時専用型）のため [_]struct + for では扱えず、comptime タプル + inline for を使用する
+    // isArrayLike 自身は文字列を除外しない（[]const u8 は slice なので true）。除外は呼び出し側が
+    // isStringLike を先に判定して行う。*const [N]u8 は pointer .one なので array にも slice にも該当せず false。
+    const test_cases = .{
+        .{ .name = "[]u32", .input = []u32, .expected = true },
+        .{ .name = "[3]u32", .input = [3]u32, .expected = true },
+        .{ .name = "[]const u8", .input = []const u8, .expected = true },
+        .{ .name = "*const [3]u8", .input = *const [3]u8, .expected = false },
+        .{ .name = "u32", .input = u32, .expected = false },
+    };
+
+    inline for (test_cases) |tc| {
+        errdefer std.debug.print("FAIL: {s}\n", .{tc.name});
+
+        try std.testing.expectEqual(tc.expected, isArrayLike(tc.input));
+    }
+}
+
+// --- isOptional ---
+
+test "isOptional" {
+    // input が type（コンパイル時専用型）のため [_]struct + for では扱えず、comptime タプル + inline for を使用する
+    const test_cases = .{
+        .{ .name = "?u32", .input = ?u32, .expected = true },
+        .{ .name = "?[]const u8", .input = ?[]const u8, .expected = true },
+        .{ .name = "u32", .input = u32, .expected = false },
+        .{ .name = "[]const u8", .input = []const u8, .expected = false },
+    };
+
+    inline for (test_cases) |tc| {
+        errdefer std.debug.print("FAIL: {s}\n", .{tc.name});
+
+        try std.testing.expectEqual(tc.expected, isOptional(tc.input));
     }
 }
 
