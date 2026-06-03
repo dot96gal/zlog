@@ -1825,6 +1825,15 @@ test "writeEntry: nested struct containing array (logfmt)" {
     try std.testing.expectEqualStrings(" user.roles=[\"admin\",\"dev\"]", buf[0..writer.end]);
 }
 
+test "writeEntry: multi-level nested struct flattens with dots (logfmt)" {
+    var buf: [64]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&buf);
+
+    try writeEntry(.logfmt, &writer, "user", .{ .address = .{ .city = "tokyo" } });
+
+    try std.testing.expectEqualStrings(" user.address.city=\"tokyo\"", buf[0..writer.end]);
+}
+
 test "writeEntry: nested empty struct keeps key (logfmt)" {
     var buf: [64]u8 = undefined;
     var writer = std.Io.Writer.fixed(&buf);
